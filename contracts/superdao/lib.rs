@@ -4,17 +4,95 @@
 mod superdao {
     use ink::{
         prelude::vec::Vec,
+        xcm::prelude::*,
         storage::{Mapping},
+        scale::{Encode, Decode},
     };
 
-    #[derive(Clone, Default)]
+
+    #[derive(Clone)]
+    #[cfg_attr(
+        feature = "std",
+        derive(Debug, PartialEq, Eq, ink::storage::traits::StorageLayout)
+    )]
+    #[ink::scale_derive(Encode, Decode, TypeInfo)]
+    // src: https://github.com/use-ink/ink-examples/blob/main/multisig/lib.rs#L119
+    pub struct ContractCall {
+        /// The `AccountId` of the contract that is called in this transaction.
+        pub callee: AccountId,
+        /// The selector bytes that identifies the function of the callee that should be
+        /// called.
+        pub selector: [u8; 4],
+        /// The SCALE encoded parameters that are passed to the called function.
+        pub input: Vec<u8>,
+        /// The amount of chain balance that is transferred to the callee.
+        pub transferred_value: Balance,
+        /// Gas limit for the execution of the call.
+        pub ref_time_limit: u64,
+        /// If set to true the transaction will be allowed to re-enter the multisig
+        /// contract. Re-entrancy can lead to vulnerabilities. Use at your own
+        /// risk.
+        pub allow_reentry: bool,
+    }
+
+    #[derive(Clone)]
+    #[cfg_attr(
+        feature = "std",
+        derive(Debug, PartialEq, Eq, ink::storage::traits::StorageLayout)
+    )]
+    #[ink::scale_derive(Encode, Decode, TypeInfo)]
+    pub struct ChainCall {
+        // encoded XCM `Location`
+        dest: Vec<u8>,
+        // encoded XCM `Message`
+        msg: Vec<u8>,
+    }
+
+    // TODO: move me to a better place
+    impl ChainCall {
+        pub fn new(dest: &Location, msg: &Xcm<()>) -> Self {
+            Self {
+                dest: dest.encode(),
+                msg: msg.encode(),
+            }
+        }
+
+        pub fn get_dest(&self) -> Location {
+            Location::decode(&mut &self.dest[..]).expect("dest should have valid encoding.")
+        }
+
+        pub fn get_msg(&self) -> Xcm<()> {
+            Xcm::decode(&mut &self.msg[..]).expect("msg should have valid encoding.")
+        }
+
+        pub fn get_encoded_dest(&self) -> Vec<u8> {
+            self.dest.clone()
+        }
+
+        pub fn get_encoded_msg(&self) -> Vec<u8> {
+            self.msg.clone()
+        }
+    }
+
+    #[derive(Clone)]
+    #[cfg_attr(
+        feature = "std",
+        derive(Debug, PartialEq, Eq, ink::storage::traits::StorageLayout)
+    )]
+    #[ink::scale_derive(Encode, Decode, TypeInfo)]
+    pub enum Call {
+        Contract(ContractCall),
+        Chain(ChainCall)
+    }
+
+    #[derive(Clone)]
     #[cfg_attr(
         feature = "std",
         derive(Debug, PartialEq, Eq, ink::storage::traits::StorageLayout)
     )]
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
     pub struct Proposal {
-        call: u8,
+        call: Call,
         voting_period_end: BlockNumber,
     }
 
@@ -58,12 +136,12 @@ mod superdao {
         }
 
         #[ink(message)]
-        pub fn create_proposal(&mut self, proposal: u8) {
+        pub fn create_proposal(&mut self, call: Call) {
             // TODO: return error
             self.ensure_member();
 
             let proposal = Proposal {
-                call: proposal,
+                call,
                 voting_period_end: self.env().block_number() + 10
             };
 
@@ -111,7 +189,7 @@ mod superdao {
             }
         }
 
-        fn dispatch_call(&self, call: u8) -> Result<(), Error> {
+        fn dispatch_call(&self, call: Call) -> Result<(), Error> {
             Ok(())
         }
 
@@ -167,14 +245,38 @@ mod superdao {
         }
 
         #[ink::test]
-        fn create_proposal_works() {
+        fn create_contract_proposal_works() {
             let mut superdao = Superdao::new();
             let accounts = ink::env::test::default_accounts::<Environment>();
+            let call = Call::Contract(ContractCall {
+                callee: accounts.alice,
+                selector: [0; 4],
+                input: vec![],
+                transferred_value: 0,
+                ref_time_limit: 0,
+                allow_reentry: false,
+            });
 
             superdao.register_member(accounts.alice);
-            superdao.create_proposal(1);
+            superdao.create_proposal(call.clone());
             assert_eq!(superdao.proposals.get(superdao.next_id-1), Some(Proposal {
-                call: 1,
+                call,
+                voting_period_end: 10
+            }));
+        }
+
+        #[ink::test]
+        fn create_chain_proposal_works() {
+            let mut superdao = Superdao::new();
+            let accounts = ink::env::test::default_accounts::<Environment>();
+            let location = Location::here();
+            let msg: Xcm<()> = Xcm::new();
+            let call = Call::Chain(ChainCall::new(&location, &msg));
+
+            superdao.register_member(accounts.alice);
+            superdao.create_proposal(call.clone());
+            assert_eq!(superdao.proposals.get(superdao.next_id-1), Some(Proposal {
+                call,
                 voting_period_end: 10
             }));
         }
@@ -183,9 +285,17 @@ mod superdao {
         fn submit_vote_works() {
             let mut superdao = Superdao::new();
             let accounts = ink::env::test::default_accounts::<Environment>();
+            let call = Call::Contract(ContractCall {
+                callee: accounts.alice,
+                selector: [0; 4],
+                input: vec![],
+                transferred_value: 0,
+                ref_time_limit: 0,
+                allow_reentry: false,
+            });
 
             superdao.register_member(accounts.alice);
-            superdao.create_proposal(1);
+            superdao.create_proposal(call);
 
             superdao.submit_vote(superdao.next_id-1, 1);
 
@@ -196,12 +306,35 @@ mod superdao {
         fn resolve_proposal_works() {
             let mut superdao = Superdao::new();
             let accounts = ink::env::test::default_accounts::<Environment>();
+            let call = Call::Contract(ContractCall {
+                callee: accounts.alice,
+                selector: [0; 4],
+                input: vec![],
+                transferred_value: 0,
+                ref_time_limit: 0,
+                allow_reentry: false,
+            });
 
             superdao.register_member(accounts.alice);
-            superdao.create_proposal(1);
+            superdao.create_proposal(call);
             superdao.submit_vote(superdao.next_id-1, 1);
 
             superdao.resolve_proposal(superdao.next_id-1);
+        }
+
+        mod chain_call {
+            use super::*;
+            #[ink::test]
+            fn new_works() {
+                let location = Location::here();
+                let msg: Xcm<()> = Xcm::new();
+                let chain_call = ChainCall::new(&location, &msg);
+
+                assert_eq!(chain_call.get_dest(), location);
+                assert_eq!(chain_call.get_msg(), msg);
+                assert_eq!(&chain_call.get_encoded_dest(), &location.encode());
+                assert_eq!(&chain_call.get_encoded_msg(), &msg.encode());
+            }
         }
     }
 }
