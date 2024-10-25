@@ -6,8 +6,21 @@ mod superdao {
         prelude::vec::Vec,
         xcm::prelude::*,
         storage::{Mapping},
-        scale::{Encode, Decode},
+        scale::{Encode, Decode, Output},
+        env::{CallFlags, call::{build_call, ExecutionInput}},
     };
+
+    /// A wrapper that allows us to encode a blob of bytes.
+    ///
+    /// We use this to pass the set of untyped (bytes) parameters to the `CallBuilder`.
+    #[derive(Clone)]
+    struct CallInput<'a>(&'a [u8]);
+
+    impl<'a> ink::scale::Encode for CallInput<'a> {
+        fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
+            dest.write(self.0);
+        }
+    }
 
 
     #[derive(Clone)]
@@ -173,14 +186,14 @@ mod superdao {
         }
 
         #[ink(message)]
-        pub fn resolve_proposal(&self, prop_id: u32) {
+        pub fn resolve_proposal(&mut self, prop_id: u32) {
             self.ensure_proposal_exists(prop_id);
 
             let proposal = self.proposals.take(prop_id).expect("Proposal existence confirmed above; qed");
 
-            assert!(self.env().block_number() <= proposal.voting_period_end, "Proposal not ready to execute");
+            assert!(self.env().block_number() >= proposal.voting_period_end, "Proposal not ready to execute");
 
-            let votes = self.votes.take(prop_id).expect("Proposal existence confirmed above; qed");
+            let votes = self.votes.take(prop_id).expect("No votes yet");
 
             let total_ayes = votes.iter().filter(|(_, vote)| vote == &1).count() as u8;
 
@@ -189,7 +202,51 @@ mod superdao {
             }
         }
 
+        #[cfg(test)]
+        fn dispatch_call(&self, call: Call) -> Result<(), Error> { Ok(()) }
+        #[cfg(not(test))]
         fn dispatch_call(&self, call: Call) -> Result<(), Error> {
+            // TODO: revisit value transferred
+            match call {
+                Call::Contract(call) => {
+                    // source: https://github.com/use-ink/ink-examples/blob/main/multisig/lib.rs#L541
+                    let call_flags = if call.allow_reentry {
+                        CallFlags::ALLOW_REENTRY
+                    } else {
+                        CallFlags::empty()
+                    };
+
+                    let result = build_call::<<Self as ::ink::env::ContractEnv>::Env>()
+                        .call(call.callee)
+                        .ref_time_limit(call.ref_time_limit)
+                        .transferred_value(call.transferred_value)
+                        .call_flags(call_flags)
+                        .exec_input(
+                            ExecutionInput::new(call.selector.into()).push_arg(CallInput(&call.input)),
+                        )
+                        .returns::<()>()
+                        .try_invoke();
+                    assert!(result.is_ok(), "Contract Call failed");
+                },
+                Call::Chain(call) => {
+                    let dest = call.get_dest();
+                    let msg = call.get_msg();
+
+                    // TODO: proper error handling
+                    // use xcm_execute if dest is local chain, otherwise xcm_send
+                    let was_success = if dest == Location::here() {
+                        self.env()
+                            .xcm_execute(&VersionedXcm::V4(msg)).is_ok()
+                    } else {
+                        self.env().xcm_send(
+                            &VersionedLocation::V4(dest),
+                            &VersionedXcm::V4(msg),
+                        ).is_ok()
+                    };
+
+                    assert!(was_success, "XCM Call failed");
+                }
+            }
             Ok(())
         }
 
@@ -208,10 +265,8 @@ mod superdao {
 
     #[cfg(test)]
     mod tests {
-        /// Imports all the definitions from the outer scope so we can use them here.
         use super::*;
 
-        /// We test if the default constructor does its job.
         #[ink::test]
         fn default_works() {
             let superdao = Superdao::new();
@@ -302,6 +357,7 @@ mod superdao {
             assert_eq!(superdao.votes.get(superdao.next_id-1), Some(vec![(accounts.alice, 1)]));
         }
 
+        // TODO: write this test with e2e tests
         #[ink::test]
         fn resolve_proposal_works() {
             let mut superdao = Superdao::new();
@@ -318,7 +374,9 @@ mod superdao {
             superdao.register_member(accounts.alice);
             superdao.create_proposal(call);
             superdao.submit_vote(superdao.next_id-1, 1);
-
+            for _ in 0..10 {
+                ink::env::test::advance_block::<ink::env::DefaultEnvironment>();
+            }
             superdao.resolve_proposal(superdao.next_id-1);
         }
 
@@ -334,6 +392,32 @@ mod superdao {
                 assert_eq!(chain_call.get_msg(), msg);
                 assert_eq!(&chain_call.get_encoded_dest(), &location.encode());
                 assert_eq!(&chain_call.get_encoded_msg(), &msg.encode());
+            }
+
+            #[ink::test]
+            fn xcm_encoded_calls_helper() {
+                let location = Location::here();
+
+                let accounts = ink::env::test::default_accounts::<Environment>();
+
+                let value: Balance = 10000000000;
+                let asset: Asset = (Location::parent(), value).into();
+                let beneficiary = AccountId32 {
+                    network: None,
+                    id: *accounts.alice.as_ref(),
+                };
+
+                let msg: Xcm<()> = Xcm::builder()
+                    .withdraw_asset(asset.clone().into())
+                    .buy_execution(asset.clone(), Unlimited)
+                    .deposit_asset(asset.into(), beneficiary.into())
+                    .build();
+
+                let chain_call = ChainCall::new(&location, &msg);
+
+                ink::env::debug_println!("dest: {:?}", hex::encode(chain_call.get_encoded_dest()));
+                ink::env::debug_println!("msg: {:?}", hex::encode(chain_call.get_encoded_msg()));
+
             }
         }
     }
