@@ -109,34 +109,40 @@ mod superdao {
         voting_period_end: BlockNumber,
     }
 
-    /// Errors that can occur upon calling this contract.
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
     pub enum Error {
-        /// Returned if the call failed.
         DispatchFailed,
     }
 
-    //- members: StorageVec< AccountId > //contracts
-    // - proposals: Mapping < id, Proposal >
-    // - votes: Mapping <prop_id, votes>
-    // - vote_threshold: u8
     #[ink(storage)]
     #[derive(Default)]
     pub struct Superdao {
         members: Vec<AccountId>,
         proposals: Mapping < u32, Proposal >,
         votes: Mapping < u32, Vec<(AccountId, u8)> >,
-        vote_threshold: u8,
         next_id: u32,
+        vote_threshold: u8,
+        voting_period: BlockNumber,
     }
 
     impl Superdao {
         #[ink(constructor)]
-        pub fn new() -> Self {
-            Default::default()
+        pub fn new(vote_threshold: u8, voting_period: BlockNumber) -> Self {
+            Self {
+                members: Vec::new(),
+                proposals: Mapping::new(),
+                votes: Mapping::new(),
+                next_id: 0,
+                vote_threshold,
+                voting_period,
+            }
         }
 
+        #[ink(constructor)]
+        pub fn default() -> Self {
+            Default::default()
+        }
 
         #[ink(message)]
         pub fn register_member(&mut self, member: AccountId) {
@@ -155,7 +161,7 @@ mod superdao {
 
             let proposal = Proposal {
                 call,
-                voting_period_end: self.env().block_number() + 10
+                voting_period_end: self.env().block_number() + self.voting_period,
             };
 
             self.proposals.insert(self.next_id, &proposal);
@@ -268,16 +274,26 @@ mod superdao {
         use super::*;
 
         #[ink::test]
-        fn default_works() {
-            let superdao = Superdao::new();
+        fn new_works() {
+            let superdao = Superdao::new(5, 4);
             assert_eq!(superdao.members.len(), 0);
-            assert_eq!(superdao.vote_threshold, 0);
             assert_eq!(superdao.next_id, 0);
+            assert_eq!(superdao.vote_threshold, 5);
+            assert_eq!(superdao.voting_period, 4);
+        }
+
+        #[ink::test]
+        fn default_works() {
+            let superdao = Superdao::default();
+            assert_eq!(superdao.members.len(), 0);
+            assert_eq!(superdao.next_id, 0);
+            assert_eq!(superdao.vote_threshold, 0);
+            assert_eq!(superdao.voting_period, 0);
         }
 
         #[ink::test]
         fn register_member_works() {
-            let mut superdao = Superdao::new();
+            let mut superdao = Superdao::default();
             let accounts = ink::env::test::default_accounts::<Environment>();
 
             superdao.register_member(accounts.alice);
@@ -287,7 +303,7 @@ mod superdao {
 
         #[ink::test]
         fn deregister_member_works() {
-            let mut superdao = Superdao::new();
+            let mut superdao = Superdao::default();
             let accounts = ink::env::test::default_accounts::<Environment>();
 
             superdao.register_member(accounts.alice);
@@ -301,7 +317,7 @@ mod superdao {
 
         #[ink::test]
         fn create_contract_proposal_works() {
-            let mut superdao = Superdao::new();
+            let mut superdao = Superdao::default();
             let accounts = ink::env::test::default_accounts::<Environment>();
             let call = Call::Contract(ContractCall {
                 callee: accounts.alice,
@@ -316,13 +332,13 @@ mod superdao {
             superdao.create_proposal(call.clone());
             assert_eq!(superdao.proposals.get(superdao.next_id-1), Some(Proposal {
                 call,
-                voting_period_end: 10
+                voting_period_end: 0
             }));
         }
 
         #[ink::test]
         fn create_chain_proposal_works() {
-            let mut superdao = Superdao::new();
+            let mut superdao = Superdao::default();
             let accounts = ink::env::test::default_accounts::<Environment>();
             let location = Location::here();
             let msg: Xcm<()> = Xcm::new();
@@ -332,13 +348,13 @@ mod superdao {
             superdao.create_proposal(call.clone());
             assert_eq!(superdao.proposals.get(superdao.next_id-1), Some(Proposal {
                 call,
-                voting_period_end: 10
+                voting_period_end: 0
             }));
         }
 
         #[ink::test]
         fn submit_vote_works() {
-            let mut superdao = Superdao::new();
+            let mut superdao = Superdao::default();
             let accounts = ink::env::test::default_accounts::<Environment>();
             let call = Call::Contract(ContractCall {
                 callee: accounts.alice,
@@ -360,7 +376,7 @@ mod superdao {
         // TODO: write this test with e2e tests
         #[ink::test]
         fn resolve_proposal_works() {
-            let mut superdao = Superdao::new();
+            let mut superdao = Superdao::default();
             let accounts = ink::env::test::default_accounts::<Environment>();
             let call = Call::Contract(ContractCall {
                 callee: accounts.alice,
