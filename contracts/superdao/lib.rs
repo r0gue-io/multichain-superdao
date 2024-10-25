@@ -1,5 +1,13 @@
 #![cfg_attr(not(feature = "std"), no_std, no_main)]
 
+// TODO tracker
+// - current member implementation is insecure, spin up many contracts and take over voting
+// - need failing tests
+// - need getters
+// - need SubDa0 trait
+// - e2e tests
+
+
 #[ink::contract]
 mod superdao {
     use ink::{
@@ -145,13 +153,14 @@ mod superdao {
         }
 
         #[ink(message)]
-        pub fn register_member(&mut self, member: AccountId) {
-            self.members.push(member);
+        pub fn register_member(&mut self) {
+            self.members.push(self.env().caller());
         }
 
         #[ink(message)]
-        pub fn deregister_member(&mut self, member: AccountId) {
-            self.members.retain(|&x| x != member);
+        pub fn deregister_member(&mut self) {
+            let caller = self.env().caller();
+            self.members.retain(|&x| x != caller);
         }
 
         #[ink(message)]
@@ -296,8 +305,9 @@ mod superdao {
             let mut superdao = Superdao::default();
             let accounts = ink::env::test::default_accounts::<Environment>();
 
-            superdao.register_member(accounts.alice);
-            superdao.register_member(accounts.bob);
+            superdao.register_member();
+            ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
+            superdao.register_member();
             assert_eq!(superdao.members.len(), 2);
         }
 
@@ -306,12 +316,14 @@ mod superdao {
             let mut superdao = Superdao::default();
             let accounts = ink::env::test::default_accounts::<Environment>();
 
-            superdao.register_member(accounts.alice);
-            superdao.register_member(accounts.bob);
+            superdao.register_member();
+            ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
+            superdao.register_member();
 
-            superdao.deregister_member(accounts.alice);
+            superdao.deregister_member();
             assert_eq!(superdao.members.len(), 1);
-            superdao.deregister_member(accounts.bob);
+            ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.alice);
+            superdao.deregister_member();
             assert_eq!(superdao.members.len(), 0);
         }
 
@@ -328,7 +340,7 @@ mod superdao {
                 allow_reentry: false,
             });
 
-            superdao.register_member(accounts.alice);
+            superdao.register_member();
             superdao.create_proposal(call.clone());
             assert_eq!(superdao.proposals.get(superdao.next_id-1), Some(Proposal {
                 call,
@@ -344,7 +356,7 @@ mod superdao {
             let msg: Xcm<()> = Xcm::new();
             let call = Call::Chain(ChainCall::new(&location, &msg));
 
-            superdao.register_member(accounts.alice);
+            superdao.register_member();
             superdao.create_proposal(call.clone());
             assert_eq!(superdao.proposals.get(superdao.next_id-1), Some(Proposal {
                 call,
@@ -365,7 +377,7 @@ mod superdao {
                 allow_reentry: false,
             });
 
-            superdao.register_member(accounts.alice);
+            superdao.register_member();
             superdao.create_proposal(call);
 
             superdao.submit_vote(superdao.next_id-1, 1);
@@ -387,7 +399,7 @@ mod superdao {
                 allow_reentry: false,
             });
 
-            superdao.register_member(accounts.alice);
+            superdao.register_member();
             superdao.create_proposal(call);
             superdao.submit_vote(superdao.next_id-1, 1);
             for _ in 0..10 {
