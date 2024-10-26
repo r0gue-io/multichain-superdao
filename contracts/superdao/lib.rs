@@ -47,6 +47,7 @@ mod superdao {
     pub struct Superdao {
         members: Vec<AccountId>,
         proposals: Mapping<u32, Proposal>,
+        active_proposals: Vec<u32>,
         votes: Mapping<u32, Vec<(AccountId, Vote)>>,
         next_id: u32,
         vote_threshold: u8,
@@ -59,6 +60,7 @@ mod superdao {
             Self {
                 members: Vec::new(),
                 proposals: Mapping::new(),
+                active_proposals: Vec::new(),
                 votes: Mapping::new(),
                 next_id: 0,
                 vote_threshold,
@@ -79,6 +81,8 @@ mod superdao {
                 .proposals
                 .take(prop_id)
                 .expect("Proposal existence confirmed above; qed");
+
+            self.active_proposals.retain(|&x| x != prop_id);
 
             assert!(
                 self.env().block_number() >= proposal.voting_period_end,
@@ -179,6 +183,7 @@ mod superdao {
             };
 
             self.proposals.insert(self.next_id, &proposal);
+            self.active_proposals.push(self.next_id);
             self.next_id += 1;
 
             // TODO: event!
@@ -214,6 +219,7 @@ mod superdao {
         fn new_works() {
             let superdao = Superdao::new(5, 4);
             assert_eq!(superdao.members.len(), 0);
+            assert_eq!(superdao.active_proposals.len(), 0);
             assert_eq!(superdao.next_id, 0);
             assert_eq!(superdao.vote_threshold, 5);
             assert_eq!(superdao.voting_period, 4);
@@ -223,6 +229,7 @@ mod superdao {
         fn default_works() {
             let superdao = Superdao::default();
             assert_eq!(superdao.members.len(), 0);
+            assert_eq!(superdao.active_proposals.len(), 0);
             assert_eq!(superdao.next_id, 0);
             assert_eq!(superdao.vote_threshold, 0);
             assert_eq!(superdao.voting_period, 0);
@@ -277,6 +284,7 @@ mod superdao {
                     voting_period_end: 0
                 })
             );
+            assert_eq!(superdao.active_proposals.len(), 1);
         }
 
         #[ink::test]
@@ -296,6 +304,7 @@ mod superdao {
                     voting_period_end: 0
                 })
             );
+            assert_eq!(superdao.active_proposals.len(), 1);
         }
 
         #[ink::test]
@@ -343,6 +352,8 @@ mod superdao {
                 ink::env::test::advance_block::<ink::env::DefaultEnvironment>();
             }
             superdao.resolve_proposal(superdao.next_id - 1);
+            assert_eq!(superdao.proposals.get(superdao.next_id-1), None);
+            assert_eq!(superdao.active_proposals.len(), 0);
         }
 
         #[ink::test]
