@@ -46,6 +46,24 @@ pub trait SuperDao {
     fn vote(&mut self, proposal_id: u32, vote: Vote);
 }
 
+#[ink::trait_definition]
+pub trait SuperDaoQuery {
+    #[ink(message)]
+    fn get_members(&self) -> Vec<AccountId>;
+
+    #[ink(message)]
+    fn is_member(&self) -> bool;
+
+    #[ink(message)]
+    fn get_proposal(&self, index: u32) -> Option<Proposal>;
+
+    #[ink(message)]
+    fn get_proposals(&self) -> Vec<Proposal>;
+
+    #[ink(message)]
+    fn get_votes(&self, proposal_id: u32) -> Vec<(AccountId, Vote)>;
+}
+
 #[derive(Clone)]
 #[cfg_attr(
     feature = "std",

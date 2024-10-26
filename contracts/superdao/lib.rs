@@ -1,16 +1,16 @@
 #![cfg_attr(not(feature = "std"), no_std, no_main)]
 
 // TODO tracker
-// - current member implementation is insecure, spin up many contracts and take over voting
+// - current member implementation is insecure -> can spin up many contracts and take over voting
 // - need failing tests
-// - need getters
-// - need SubDa0 trait
+// - need getters - mostly done
 // - e2e tests
 // - limit registering to contract addresses only <- if gov token, maybe not
 // - emit events
 
 #[ink::contract]
 mod superdao {
+    use ink::codegen::Env;
     use ink::{
         env::{
             call::{build_call, ExecutionInput},
@@ -21,8 +21,9 @@ mod superdao {
         storage::Mapping,
         xcm::prelude::*,
     };
-
-    use superda0_traits::superdao::{Call, ChainCall, ContractCall, Proposal, SuperDao, Vote};
+    use superda0_traits::superdao::{
+        Call, ChainCall, ContractCall, Proposal, SuperDao, SuperDaoQuery, Vote,
+    };
 
     /// A wrapper that allows us to encode a blob of bytes.
     ///
@@ -211,6 +212,40 @@ mod superdao {
         }
     }
 
+    impl SuperDaoQuery for Superdao {
+        #[ink(message)]
+        fn get_members(&self) -> Vec<AccountId> {
+            self.members.clone()
+        }
+
+        #[ink(message)]
+        fn is_member(&self) -> bool {
+            self.members.contains(&self.env().caller())
+        }
+
+        #[ink(message)]
+        fn get_proposal(&self, index: u32) -> Option<Proposal> {
+            self.proposals.get(index)
+        }
+
+        #[ink(message)]
+        fn get_proposals(&self) -> Vec<Proposal> {
+            self.active_proposals
+                .iter()
+                .map(|&x| {
+                    self.proposals
+                        .get(x)
+                        .expect("If prop_id is present, proposal exists.")
+                })
+                .collect()
+        }
+
+        #[ink(message)]
+        fn get_votes(&self, proposal_id: u32) -> Vec<(AccountId, Vote)> {
+            self.votes.get(proposal_id).unwrap_or_default()
+        }
+    }
+
     #[cfg(test)]
     mod tests {
         use super::*;
@@ -352,8 +387,109 @@ mod superdao {
                 ink::env::test::advance_block::<ink::env::DefaultEnvironment>();
             }
             superdao.resolve_proposal(superdao.next_id - 1);
-            assert_eq!(superdao.proposals.get(superdao.next_id-1), None);
+            assert_eq!(superdao.proposals.get(superdao.next_id - 1), None);
             assert_eq!(superdao.active_proposals.len(), 0);
+        }
+
+        mod super_dao_query {
+            use super::*;
+
+            #[ink::test]
+            fn get_members_works() {
+                let mut superdao = Superdao::default();
+                let accounts = ink::env::test::default_accounts::<Environment>();
+
+                superdao.register_member();
+                ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
+                superdao.register_member();
+
+                assert_eq!(superdao.get_members(), vec![accounts.alice, accounts.bob]);
+            }
+
+            #[ink::test]
+            fn is_member_works() {
+                let mut superdao = Superdao::default();
+                let accounts = ink::env::test::default_accounts::<Environment>();
+
+                superdao.register_member();
+                assert!(superdao.is_member());
+
+                ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
+                assert!(!superdao.is_member());
+            }
+
+            #[ink::test]
+            fn get_proposal_works() {
+                let mut superdao = Superdao::default();
+                let accounts = ink::env::test::default_accounts::<Environment>();
+                let call = Call::Contract(ContractCall {
+                    callee: accounts.alice,
+                    selector: [0; 4],
+                    input: vec![],
+                    transferred_value: 0,
+                    ref_time_limit: 0,
+                    allow_reentry: false,
+                });
+
+                superdao.register_member();
+                superdao.create_proposal(call.clone());
+
+                assert_eq!(
+                    superdao.get_proposal(superdao.next_id - 1),
+                    Some(Proposal {
+                        call,
+                        voting_period_end: 0
+                    })
+                );
+            }
+
+            #[ink::test]
+            fn get_proposals_works() {
+                let mut superdao = Superdao::default();
+                let accounts = ink::env::test::default_accounts::<Environment>();
+                let call = Call::Contract(ContractCall {
+                    callee: accounts.alice,
+                    selector: [0; 4],
+                    input: vec![],
+                    transferred_value: 0,
+                    ref_time_limit: 0,
+                    allow_reentry: false,
+                });
+
+                superdao.register_member();
+                superdao.create_proposal(call.clone());
+
+                assert_eq!(
+                    superdao.get_proposals(),
+                    vec![Proposal {
+                        call,
+                        voting_period_end: 0
+                    }]
+                );
+            }
+
+            #[ink::test]
+            fn get_votes_works() {
+                let mut superdao = Superdao::default();
+                let accounts = ink::env::test::default_accounts::<Environment>();
+                let call = Call::Contract(ContractCall {
+                    callee: accounts.alice,
+                    selector: [0; 4],
+                    input: vec![],
+                    transferred_value: 0,
+                    ref_time_limit: 0,
+                    allow_reentry: false,
+                });
+
+                superdao.register_member();
+                superdao.create_proposal(call.clone());
+                superdao.vote(superdao.next_id - 1, Vote::Aye);
+
+                assert_eq!(
+                    superdao.get_votes(superdao.next_id - 1),
+                    vec![(accounts.alice, Vote::Aye)]
+                );
+            }
         }
 
         #[ink::test]
