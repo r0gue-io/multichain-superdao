@@ -180,12 +180,12 @@ mod superdao {
 
             let proposal = crate::superdao::Proposal {
                 call,
-                voting_period_end: self.env().block_number() + self.voting_period,
+                voting_period_end: self.env().block_number().saturating_add(self.voting_period),
             };
 
             self.proposals.insert(self.next_id, &proposal);
             self.active_proposals.push(self.next_id);
-            self.next_id += 1;
+            self.next_id = self.next_id.saturating_add(1);
 
             // TODO: event!
         }
