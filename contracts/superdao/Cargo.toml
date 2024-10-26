@@ -5,8 +5,8 @@ authors = ["[your_name] <[your_email]>"]
 edition = "2021"
 
 [dependencies]
-ink = { git = "https://github.com/use-ink/ink", branch = "peter/fix-xcm-encoding", default-features = false }
-#polkavm-derive = "0.11.0"
+ink = { git = "https://github.com/r0gue-io/ink", branch = "sub0", default-features = false }
+polkavm-derive = "0.11.0"
 superda0-traits = { path = "../../traits", default-features = false}
 
 [dev-dependencies]
