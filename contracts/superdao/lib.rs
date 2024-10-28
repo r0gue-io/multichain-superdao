@@ -22,7 +22,7 @@ mod superdao {
         xcm::prelude::*,
     };
     use superda0_traits::superdao::{
-        Call, ChainCall, ContractCall, Proposal, SuperDao, SuperDaoQuery, Vote,
+        Call, ChainCall, ContractCall, Proposal, SuperDao, SuperDaoQuery, Vote, Error
     };
 
     /// A wrapper that allows us to encode a blob of bytes.
@@ -35,12 +35,6 @@ mod superdao {
         fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
             dest.write(self.0);
         }
-    }
-
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    pub enum Error {
-        DispatchFailed,
     }
 
     #[ink(storage)]
@@ -56,7 +50,7 @@ mod superdao {
     }
 
     impl Superdao {
-        #[ink(constructor)]
+        #[ink(constructor, payable)]
         pub fn new(vote_threshold: u8, voting_period: BlockNumber) -> Self {
             Self {
                 members: Vec::new(),
@@ -69,14 +63,14 @@ mod superdao {
             }
         }
 
-        #[ink(constructor)]
+        #[ink(constructor, payable)]
         pub fn default() -> Self {
             Default::default()
         }
 
         #[ink(message)]
         pub fn resolve_proposal(&mut self, prop_id: u32) {
-            self.ensure_proposal_exists(prop_id);
+            assert!(self.ensure_proposal_exists(prop_id).is_ok(), "Proposal does not exist.");
 
             let proposal = self
                 .proposals
@@ -148,12 +142,18 @@ mod superdao {
             Ok(())
         }
 
-        fn ensure_member(&self) {
-            assert!(self.members.contains(&self.env().caller()), "Not a member");
+        fn ensure_member(&self) -> Result<(), Error> {
+            if !self.is_member() {
+                return Err(Error::NotMember)
+            }
+            Ok(())
         }
 
-        fn ensure_proposal_exists(&self, prop_id: u32) {
-            assert!(self.proposals.contains(prop_id), "Proposal does not exist");
+        fn ensure_proposal_exists(&self, prop_id: u32) -> Result<(), Error>{
+            if !self.proposals.contains(prop_id) {
+               return Err(Error::ProposalNotFound)
+            }
+            Ok(())
         }
 
         fn find_vote(&self, votes: &Vec<(AccountId, Vote)>) -> Option<usize> {
@@ -163,8 +163,12 @@ mod superdao {
 
     impl SuperDao for Superdao {
         #[ink(message)]
-        fn register_member(&mut self) {
+        fn register_member(&mut self) -> Result<(), Error>{
+            if self.is_member() {
+                return Err(Error::AlreadyMember)
+            }
             self.members.push(self.env().caller());
+            Ok(())
         }
 
         #[ink(message)]
@@ -174,11 +178,10 @@ mod superdao {
         }
 
         #[ink(message)]
-        fn create_proposal(&mut self, call: Call) {
-            // TODO: return error
-            self.ensure_member();
+        fn create_proposal(&mut self, call: Call) -> Result<(), Error>{
+            self.ensure_member()?;
 
-            let proposal = crate::superdao::Proposal {
+            let proposal = Proposal {
                 call,
                 voting_period_end: self.env().block_number().saturating_add(self.voting_period),
             };
@@ -187,14 +190,15 @@ mod superdao {
             self.active_proposals.push(self.next_id);
             self.next_id = self.next_id.saturating_add(1);
 
+            Ok(())
             // TODO: event!
         }
 
         // TODO: vote enum type!
         #[ink(message)]
-        fn vote(&mut self, prop_id: u32, vote: Vote) {
-            self.ensure_member();
-            self.ensure_proposal_exists(prop_id);
+        fn vote(&mut self, prop_id: u32, vote: Vote) -> Result<(), Error>{
+            self.ensure_member()?;
+            self.ensure_proposal_exists(prop_id)?;
 
             let mut votes = self.votes.get(&prop_id).unwrap_or_default();
             let maybe_vote = self.find_vote(&votes);
@@ -209,6 +213,7 @@ mod superdao {
             }
 
             self.votes.insert(prop_id, &votes);
+            Ok(())
         }
     }
 
