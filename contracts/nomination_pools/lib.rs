@@ -37,7 +37,7 @@ mod nomination_pools {
         derive(Debug, PartialEq, Eq, ink::storage::traits::StorageLayout)
     )]
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
-    pub struct NominatorsProposal {
+    pub struct ValidatorsProposal {
         pub encoded_extrinsic: Vec<u8>,
         pub ref_time: u64,
         pub proof_size: u64,
@@ -45,14 +45,14 @@ mod nomination_pools {
 
     #[ink(storage)]
     pub struct NominationPools {
-        nominators_proposal: Mapping<u32, NominatorsProposal>,
+        validators_proposal: Mapping<u32, ValidatorsProposal>,
         votes: Mapping<u32, Vec<(AccountId, Vote)>>,
         superdao: SuperdaoRef,
         next_id: u32,
     }
 
     #[ink::event]
-    pub struct NominatorsSuggested {
+    pub struct ValidatorsSuggested {
         #[ink(topic)]
         pub who: AccountId,
         pub proposal_id: u32,
@@ -68,7 +68,7 @@ mod nomination_pools {
     }
 
     #[ink::event]
-    pub struct NominatorsChanged {
+    pub struct ValidatorsChanged {
         #[ink(topic)]
         pub proposal_id: u32,
     }
@@ -76,7 +76,7 @@ mod nomination_pools {
     #[derive(Debug, PartialEq, Eq, Copy, Clone)]
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
     pub enum Error {
-        NominatorsProposalNonExistent,
+        ValidatorsProposalNonExistent,
     }
 
     impl NominationPools {
@@ -96,7 +96,7 @@ mod nomination_pools {
                 .returns::<SuperdaoRef>()
                 .instantiate();
             Self {
-                nominators_proposal: Mapping::new(),
+                validators_proposal: Mapping::new(),
                 votes: Mapping::new(),
                 superdao,
                 next_id: 0,
@@ -116,20 +116,20 @@ mod nomination_pools {
 
         // Call in the realy chain to nominationPools - nominate (poolid, validators)
         #[ink(message, payable)]
-        pub fn suggest_nominators(
+        pub fn suggest_validators(
             &mut self,
             encoded_extrinsic: Vec<u8>,
             ref_time: u64,
             proof_size: u64,
         ) -> Result<(), Error> {
             self.superdao.ensure_member();
-            let proposal = NominatorsProposal {
+            let proposal = ValidatorsProposal {
                 encoded_extrinsic,
                 ref_time,
                 proof_size,
             };
-            self.nominators_proposal.insert(self.next_id, &proposal);
-            self.env().emit_event(NominatorsSuggested {
+            self.validators_proposal.insert(self.next_id, &proposal);
+            self.env().emit_event(ValidatorsSuggested {
                 who: self.env().caller(),
                 proposal_id: self.next_id,
             });
@@ -138,12 +138,12 @@ mod nomination_pools {
         }
 
         #[ink(message, payable)]
-        pub fn vote_nominators(&mut self, id: u32, vote: Vote) -> Result<(), Error> {
+        pub fn vote_validators(&mut self, id: u32, vote: Vote) -> Result<(), Error> {
             self.superdao.ensure_member();
             let proposal = self
-                .nominators_proposal
+                .validators_proposal
                 .get(id)
-                .ok_or(Error::NominatorsProposalNonExistent)?;
+                .ok_or(Error::ValidatorsProposalNonExistent)?;
             // Vote on the proposal
             let mut votes = self.votes.get(&id).unwrap_or_default();
             let maybe_vote = votes.iter().position(|(x, _)| x == &self.env().caller());
@@ -165,15 +165,15 @@ mod nomination_pools {
             let total_ayes = votes.iter().filter(|(_, vote)| vote == &Vote::Aye).count() as u8;
             if total_ayes >= self.superdao.get_vote_threshold() {
                 let result = self.dispatch_call(proposal);
-                self.env().emit_event(NominatorsChanged { proposal_id: id });
-                self.nominators_proposal.remove(id);
+                self.env().emit_event(ValidatorsChanged { proposal_id: id });
+                self.validators_proposal.remove(id);
                 self.votes.remove(id);
             }
             // TODO: If total_nayes is > threshold, remove proposal
             Ok(())
         }
 
-        fn dispatch_call(&mut self, proposal: NominatorsProposal) -> Result<(), Error> {
+        fn dispatch_call(&mut self, proposal: ValidatorsProposal) -> Result<(), Error> {
             let encoded_extrinsic: Vec<u8> = proposal.encoded_extrinsic;
             let weight = Weight::from_parts(proposal.ref_time, proposal.proof_size);
 
@@ -202,11 +202,8 @@ mod nomination_pools {
 
         /// Returns the proposal call.
         #[ink(message, payable)]
-        pub fn get_nomination_pools_proposals(
-            &self,
-            proposal_id: u32,
-        ) -> Option<NominatorsProposal> {
-            self.nominators_proposal.get(proposal_id)
+        pub fn get_new_validators_proposals(&self, proposal_id: u32) -> Option<ValidatorsProposal> {
+            self.validators_proposal.get(proposal_id)
         }
 
         // TODO: Remove, just for testing

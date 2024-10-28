@@ -22,11 +22,11 @@ pop up contract --args 0xb7e78057babb3ca02c0d5fec7fd19ff2acfd23ce590948b654eb57b
 
 6- Register the validators to nominate
 ```
-pop call contract --contract nomination_pool_address (0x47447451e4b2cfd8de9048258412a360a88444a4) --message suggest_nominators --args call_data ref_time proof_size --suri //Alice -x
+pop call contract --contract nomination_pool_address (0x47447451e4b2cfd8de9048258412a360a88444a4) --message suggest_validators --args call_data ref_time proof_size --suri //Alice -x
 ```
 7- Take the proposal_id in the events and vote with other members of the superDao. Example:
 ```
-pop call contract --contract nomination_pool_address --message vote_nominators --args 0 Aye --suri //Bob -x
+pop call contract --contract nomination_pool_address --message vote_validators --args 0 Aye --suri //Bob -x
 ```
 
 ## WIP: Errors.
