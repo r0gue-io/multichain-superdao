@@ -8,7 +8,7 @@
 // - limit registering to contract addresses only <- if gov token, maybe not
 // - emit events
 
-pub use self::superdao::SuperdaoRef;
+pub use self::superdao::{Superdao, SuperdaoRef};
 
 #[ink::contract]
 mod superdao {
@@ -153,7 +153,7 @@ mod superdao {
         }
 
         #[ink(message, payable)]
-        fn ensure_member(&self) -> Result<(), Error> {
+        pub fn ensure_member(&self) -> Result<(), Error> {
             if !self.is_member() {
                 return Err(Error::NotMember);
             }

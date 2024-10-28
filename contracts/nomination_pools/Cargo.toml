@@ -9,7 +9,7 @@ ink = { git = "https://github.com/r0gue-io/ink", branch = "sub0", default-featur
 polkavm-derive = "0.11.0"
 pop-api = { git = "https://github.com/r0gue-io/pop-node", branch = "sub0", default-features = false, features = [ "messaging" ] }
 superdao = { path = "../superdao", default-features = false, features = ["ink-as-dependency"] }
-superda0-traits = { path = "../../traits", default-features = false}
+# superda0-traits = { path = "../../traits", default-features = false}
 
 [dev-dependencies]
 ink_e2e = { version = "5.0.0" }
@@ -23,7 +23,7 @@ std = [
     "ink/std",
     "superdao/std",
     "pop-api/std",
-    "superda0-traits/std",
+    # "superda0-traits/std",
 ]
 ink-as-dependency = []
 e2e-tests = []
