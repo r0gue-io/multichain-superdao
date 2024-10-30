@@ -8,6 +8,8 @@
 // - limit registering to contract addresses only <- if gov token, maybe not
 // - emit events
 
+pub use superdao::SuperdaoRef;
+
 #[ink::contract]
 mod superdao {
     use ink::codegen::Env;

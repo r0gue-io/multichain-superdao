@@ -13,8 +13,6 @@ path = "lib.rs"
 
 [features]
 default = ["std"]
-std = [
-    "ink/std",
-]
+std = ["ink/std"]
 ink-as-dependency = []
 e2e-tests = []
