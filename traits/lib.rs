@@ -2,14 +2,23 @@
 
 use ink::{
     env::{DefaultEnvironment, Environment},
-    prelude::vec::Vec,
+    prelude::{string::String, vec::Vec},
     primitives::AccountId,
-    scale::{Decode, Encode},
+    scale::{Decode, Encode, Output},
     xcm::prelude::*,
 };
 
 type Balance = <DefaultEnvironment as Environment>::Balance;
 type BlockNumber = <DefaultEnvironment as Environment>::BlockNumber;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[ink::scale_derive(Encode, Decode, TypeInfo)]
+pub enum Error {
+    DispatchFailed,
+    AlreadyMember,
+    NotMember,
+    ProposalNotFound,
+}
 
 #[derive(Clone, PartialEq)]
 #[cfg_attr(
@@ -36,16 +45,16 @@ pub struct Proposal {
 #[ink::trait_definition]
 pub trait SuperDao {
     #[ink(message)]
-    fn register_member(&mut self);
+    fn register_member(&mut self) -> Result<(), Error>;
 
     #[ink(message)]
     fn deregister_member(&mut self);
 
     #[ink(message)]
-    fn create_proposal(&mut self, call: Call);
+    fn create_proposal(&mut self, call: Call) -> Result<u32, Error>;
 
     #[ink(message)]
-    fn vote(&mut self, proposal_id: u32, vote: Vote);
+    fn vote(&mut self, proposal_id: u32, vote: Vote) -> Result<(), Error>;
 }
 
 #[ink::trait_definition]

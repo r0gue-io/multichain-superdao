@@ -21,7 +21,9 @@ mod superdao {
         storage::Mapping,
         xcm::prelude::*,
     };
-    use superdao_traits::{Call, ChainCall, ContractCall, Proposal, SuperDao, SuperDaoQuery, Vote};
+    use superdao_traits::{
+        Call, ChainCall, ContractCall, Error, Proposal, SuperDao, SuperDaoQuery, Vote,
+    };
 
     /// A wrapper that allows us to encode a blob of bytes.
     ///
@@ -179,7 +181,8 @@ mod superdao {
         }
 
         #[ink(message)]
-        fn create_proposal(&mut self, call: Call) -> Result<(), Error> {
+        fn create_proposal(&mut self, call: Call) -> Result<u32, Error> {
+            let id = self.next_id;
             self.ensure_member()?;
 
             let proposal = Proposal {
@@ -187,11 +190,11 @@ mod superdao {
                 voting_period_end: self.env().block_number().saturating_add(self.voting_period),
             };
 
-            self.proposals.insert(self.next_id, &proposal);
-            self.active_proposals.push(self.next_id);
-            self.next_id = self.next_id.saturating_add(1);
+            self.proposals.insert(id, &proposal);
+            self.active_proposals.push(id);
+            self.next_id = id.saturating_add(1);
 
-            Ok(())
+            Ok(id)
             // TODO: event!
         }
 
@@ -463,7 +466,8 @@ mod superdao {
                 });
 
                 superdao.register_member();
-                superdao.create_proposal(call.clone());
+                let proposal_id = superdao.create_proposal(call.clone());
+                assert_eq!(proposal_id, Ok(superdao.next_id - 1));
 
                 assert_eq!(
                     superdao.get_proposals(),
@@ -488,9 +492,9 @@ mod superdao {
                 });
 
                 superdao.register_member();
-                superdao.create_proposal(call.clone());
+                let proposal_id = superdao.create_proposal(call.clone());
+                assert_eq!(proposal_id, Ok(superdao.next_id - 1));
                 superdao.vote(superdao.next_id - 1, Vote::Aye);
-
                 assert_eq!(
                     superdao.get_votes(superdao.next_id - 1),
                     vec![(accounts.alice, Vote::Aye)]
