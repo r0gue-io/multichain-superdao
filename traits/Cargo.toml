@@ -1,11 +1,11 @@
 [package]
-name = "superda0-traits"
+name = "superdao-traits"
 version = "0.1.0"
 authors = ["[your_name] <[your_email]>"]
 edition = "2021"
 
 [dependencies]
-ink = { git = "https://github.com/use-ink/ink", branch = "xcm", default-features = false }
+ink = { git = "https://github.com/use-ink/ink", branch = "master", default-features = false }
 polkavm-derive = "0.11.0"
 
 [lib]

@@ -5,11 +5,11 @@ authors = ["[your_name] <[your_email]>"]
 edition = "2021"
 
 [dependencies]
-ink = { git = "https://github.com/use-ink/ink", branch = "xcm", default-features = false }
-superda0-traits = { path = "../../traits", default-features = false }
+ink = { git = "https://github.com/use-ink/ink", branch = "master", default-features = false }
+superdao-traits = { path = "../../traits", default-features = false }
 
 [dev-dependencies]
-ink_e2e = { version = "5.0.0" }
+ink_e2e = { git = "https://github.com/use-ink/ink", branch = "master" }
 hex = "0.4.3"
 
 [lib]
@@ -17,6 +17,6 @@ path = "lib.rs"
 
 [features]
 default = ["std"]
-std = ["ink/std", "superda0-traits/std"]
+std = ["ink/std", "superdao-traits/std"]
 ink-as-dependency = []
 e2e-tests = []
