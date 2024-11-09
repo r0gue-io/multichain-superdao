@@ -72,6 +72,15 @@ pub trait SuperDaoQuery {
     fn get_proposals(&self) -> Vec<(u32, Proposal)>;
 
     #[ink(message)]
+    fn get_vote_threshold(&self) -> u8;
+
+    #[ink(message)]
+    fn get_voting_period(&self) -> BlockNumber;
+
+    #[ink(message)]
+    fn get_active_proposals(&self) -> Vec<u32>;
+
+    #[ink(message)]
     fn get_votes(&self, proposal_id: u32) -> Vec<(AccountId, Vote)>;
 }
 

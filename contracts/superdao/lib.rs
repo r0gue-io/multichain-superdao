@@ -256,6 +256,21 @@ mod superdao {
         fn get_votes(&self, proposal_id: u32) -> Vec<(AccountId, Vote)> {
             self.votes.get(proposal_id).unwrap_or_default()
         }
+
+        #[ink(message)]
+        fn get_vote_threshold(&self) -> u8 {
+            self.vote_threshold
+        }
+
+        #[ink(message)]
+        fn get_voting_period(&self) -> BlockNumber {
+            self.voting_period
+        }
+
+        #[ink(message)]
+        fn get_active_proposals(&self) -> Vec<u32> {
+            self.active_proposals.clone()
+        }
     }
 
     #[cfg(test)]
