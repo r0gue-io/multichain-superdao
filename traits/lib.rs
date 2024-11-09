@@ -69,7 +69,7 @@ pub trait SuperDaoQuery {
     fn get_proposal(&self, index: u32) -> Option<Proposal>;
 
     #[ink(message)]
-    fn get_proposals(&self) -> Vec<Proposal>;
+    fn get_proposals(&self) -> Vec<(u32, Proposal)>;
 
     #[ink(message)]
     fn get_votes(&self, proposal_id: u32) -> Vec<(AccountId, Vote)>;

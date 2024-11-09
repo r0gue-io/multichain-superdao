@@ -238,13 +238,16 @@ mod superdao {
         }
 
         #[ink(message)]
-        fn get_proposals(&self) -> Vec<Proposal> {
+        fn get_proposals(&self) -> Vec<(u32, Proposal)> {
             self.active_proposals
                 .iter()
                 .map(|&x| {
-                    self.proposals
-                        .get(x)
-                        .expect("If prop_id is present, proposal exists.")
+                    (
+                        x,
+                        self.proposals
+                            .get(x)
+                            .expect("If prop_id is present, proposal exists."),
+                    )
                 })
                 .collect()
         }
@@ -284,9 +287,9 @@ mod superdao {
             let mut superdao = Superdao::default();
             let accounts = ink::env::test::default_accounts::<Environment>();
 
-            superdao.register_member();
+            assert!(superdao.register_member().is_ok());
             ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
-            superdao.register_member();
+            assert!(superdao.register_member().is_ok());
             assert_eq!(superdao.members.len(), 2);
         }
 
@@ -295,9 +298,9 @@ mod superdao {
             let mut superdao = Superdao::default();
             let accounts = ink::env::test::default_accounts::<Environment>();
 
-            superdao.register_member();
+            assert!(superdao.register_member().is_ok());
             ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
-            superdao.register_member();
+            assert!(superdao.register_member().is_ok());
 
             superdao.deregister_member();
             assert_eq!(superdao.members.len(), 1);
@@ -319,8 +322,8 @@ mod superdao {
                 allow_reentry: false,
             });
 
-            superdao.register_member();
-            superdao.create_proposal(call.clone());
+            assert!(superdao.register_member().is_ok());
+            assert!(superdao.create_proposal(call.clone()).is_ok());
             assert_eq!(
                 superdao.proposals.get(superdao.next_id - 1),
                 Some(Proposal {
@@ -339,8 +342,8 @@ mod superdao {
             let msg: Xcm<()> = Xcm::new();
             let call = Call::Chain(ChainCall::new(&location, &msg));
 
-            superdao.register_member();
-            superdao.create_proposal(call.clone());
+            assert!(superdao.register_member().is_ok());
+            assert!(superdao.create_proposal(call.clone()).is_ok());
             assert_eq!(
                 superdao.proposals.get(superdao.next_id - 1),
                 Some(Proposal {
@@ -364,10 +367,10 @@ mod superdao {
                 allow_reentry: false,
             });
 
-            superdao.register_member();
-            superdao.create_proposal(call);
+            assert!(superdao.register_member().is_ok());
+            assert!(superdao.create_proposal(call).is_ok());
 
-            superdao.vote(superdao.next_id - 1, Vote::Aye);
+            assert!(superdao.vote(superdao.next_id - 1, Vote::Aye).is_ok());
 
             assert_eq!(
                 superdao.votes.get(superdao.next_id - 1),
@@ -389,9 +392,9 @@ mod superdao {
                 allow_reentry: false,
             });
 
-            superdao.register_member();
-            superdao.create_proposal(call);
-            superdao.vote(superdao.next_id - 1, Vote::Nay);
+            assert!(superdao.register_member().is_ok());
+            assert!(superdao.create_proposal(call).is_ok());
+            assert!(superdao.vote(superdao.next_id - 1, Vote::Nay).is_ok());
             for _ in 0..10 {
                 ink::env::test::advance_block::<ink::env::DefaultEnvironment>();
             }
@@ -408,9 +411,9 @@ mod superdao {
                 let mut superdao = Superdao::default();
                 let accounts = ink::env::test::default_accounts::<Environment>();
 
-                superdao.register_member();
+                assert!(superdao.register_member().is_ok());
                 ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
-                superdao.register_member();
+                assert!(superdao.register_member().is_ok());
 
                 assert_eq!(superdao.get_members(), vec![accounts.alice, accounts.bob]);
             }
@@ -420,7 +423,7 @@ mod superdao {
                 let mut superdao = Superdao::default();
                 let accounts = ink::env::test::default_accounts::<Environment>();
 
-                superdao.register_member();
+                assert!(superdao.register_member().is_ok());
                 assert!(superdao.is_member());
 
                 ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.bob);
@@ -440,8 +443,8 @@ mod superdao {
                     allow_reentry: false,
                 });
 
-                superdao.register_member();
-                superdao.create_proposal(call.clone());
+                assert!(superdao.register_member().is_ok());
+                assert!(superdao.create_proposal(call.clone()).is_ok());
 
                 assert_eq!(
                     superdao.get_proposal(superdao.next_id - 1),
@@ -465,16 +468,19 @@ mod superdao {
                     allow_reentry: false,
                 });
 
-                superdao.register_member();
+                assert!(superdao.register_member().is_ok());
                 let proposal_id = superdao.create_proposal(call.clone());
                 assert_eq!(proposal_id, Ok(superdao.next_id - 1));
 
                 assert_eq!(
                     superdao.get_proposals(),
-                    vec![Proposal {
-                        call,
-                        voting_period_end: 0
-                    }]
+                    vec![(
+                        0,
+                        Proposal {
+                            call,
+                            voting_period_end: 0
+                        }
+                    )]
                 );
             }
 
@@ -491,10 +497,10 @@ mod superdao {
                     allow_reentry: false,
                 });
 
-                superdao.register_member();
+                assert!(superdao.register_member().is_ok());
                 let proposal_id = superdao.create_proposal(call.clone());
                 assert_eq!(proposal_id, Ok(superdao.next_id - 1));
-                superdao.vote(superdao.next_id - 1, Vote::Aye);
+                assert!(superdao.vote(superdao.next_id - 1, Vote::Aye).is_ok());
                 assert_eq!(
                     superdao.get_votes(superdao.next_id - 1),
                     vec![(accounts.alice, Vote::Aye)]
