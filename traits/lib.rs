@@ -18,6 +18,7 @@ pub enum Error {
     AlreadyMember,
     NotMember,
     ProposalNotFound,
+    ProposalIsNotApproved,
 }
 
 #[derive(Clone, PartialEq)]

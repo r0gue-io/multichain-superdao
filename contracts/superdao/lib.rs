@@ -69,7 +69,7 @@ mod superdao {
         }
 
         #[ink(message)]
-        pub fn resolve_proposal(&mut self, prop_id: u32) {
+        pub fn resolve_proposal(&mut self, prop_id: u32) -> Result<bool, Error> {
             assert!(
                 self.ensure_proposal_exists(prop_id).is_ok(),
                 "Proposal does not exist."
@@ -91,9 +91,10 @@ mod superdao {
 
             let total_ayes = votes.iter().filter(|(_, vote)| vote == &Vote::Aye).count() as u8;
 
-            if total_ayes >= self.vote_threshold {
-                let result = self.dispatch_call(proposal.call);
+            if total_ayes < self.vote_threshold {
+                return Err(Error::ProposalIsNotApproved);
             }
+            self.dispatch_call(proposal.call)
         }
 
         #[cfg(test)]
@@ -101,8 +102,7 @@ mod superdao {
             Ok(())
         }
         #[cfg(not(test))]
-        fn dispatch_call(&self, call: Call) -> Result<(), Error> {
-            // TODO: revisit value transferred
+        fn dispatch_call(&self, call: Call) -> Result<bool, Error> {
             match call {
                 Call::Contract(call) => {
                     // source: https://github.com/use-ink/ink-examples/blob/main/multisig/lib.rs#L541
@@ -123,7 +123,7 @@ mod superdao {
                         )
                         .returns::<()>()
                         .try_invoke();
-                    assert!(result.is_ok(), "Contract Call failed");
+                    return Ok(result.is_ok());
                 }
                 Call::Chain(call) => {
                     let dest = call.get_dest();
@@ -139,10 +139,9 @@ mod superdao {
                             .is_ok()
                     };
 
-                    assert!(was_success, "XCM Call failed");
+                    return Ok(was_success);
                 }
             }
-            Ok(())
         }
 
         fn ensure_member(&self) -> Result<(), Error> {
